@@ -17,15 +17,49 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [analyser, setAnalyser] = useState(null)
   const audioCtxRef = useRef(null)
   const sourceRef = useRef(null)
   const startTimeRef = useRef(0)
   const durationRef = useRef(0)
   const rafRef = useRef(null)
   const chainRef = useRef('')
+  const micStreamRef = useRef(null)
+  const micCtxRef = useRef(null)
 
   const hasRecording = !!audioBlob
   const hasEffect = selectedEffects.length > 0 && !!processedBuffer
+
+  // Set up analyser when recording starts
+  useEffect(() => {
+    if (isRecording) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      micCtxRef.current = ctx
+      const a = ctx.createAnalyser()
+      a.fftSize = 256
+      a.smoothingTimeConstant = 0.8
+      setAnalyser(a)
+
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        micStreamRef.current = stream
+        const src = ctx.createMediaStreamSource(stream)
+        src.connect(a)
+      }).catch(() => {})
+    } else {
+      // Clean up mic analyser when recording stops
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(t => t.stop())
+        micStreamRef.current = null
+      }
+      if (micCtxRef.current) {
+        try { micCtxRef.current.close() } catch {}
+        micCtxRef.current = null
+      }
+      // Delay clearing analyser so visualizer can fade
+      const t = setTimeout(() => setAnalyser(null), 500)
+      return () => clearTimeout(t)
+    }
+  }, [isRecording])
 
   useEffect(() => {
     if (!audioBlob) return
@@ -185,6 +219,7 @@ export default function App() {
           hasRecording={hasRecording}
           onToggle={isRecording ? stop : start}
           duration={duration}
+          analyser={analyser}
         />
       </div>
 

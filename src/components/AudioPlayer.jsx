@@ -3,7 +3,6 @@ import { useRef, useEffect } from 'react'
 export default function AudioPlayer({ isPlaying, isProcessing, progress, effectName, onPlayPause, disabled }) {
   const canvasRef = useRef(null)
 
-  // Draw waveform progress bar
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -13,23 +12,22 @@ export default function AudioPlayer({ isPlaying, isProcessing, progress, effectN
 
     ctx.clearRect(0, 0, w, h)
 
-    // Background bars (static waveform)
-    const barCount = 40
-    const barWidth = 2
+    const barCount = 48
+    const barWidth = 1.5
     const gap = (w - barCount * barWidth) / (barCount - 1)
 
     for (let i = 0; i < barCount; i++) {
       const x = i * (barWidth + gap)
-      const barH = 4 + Math.sin(i * 0.5) * 8 + Math.cos(i * 0.3) * 4
+      const barH = 3 + Math.sin(i * 0.45) * 6 + Math.cos(i * 0.28) * 3
       const y = (h - barH) / 2
 
       if (i / barCount < progress) {
-        ctx.fillStyle = '#FF3366'
+        ctx.fillStyle = '#C4704B'
       } else {
-        ctx.fillStyle = '#2A2D45'
+        ctx.fillStyle = '#3D3630'
       }
       ctx.beginPath()
-      ctx.roundRect(x, y, barWidth, barH, 1)
+      ctx.roundRect(x, y, barWidth, barH, 0.75)
       ctx.fill()
     }
   }, [progress])
@@ -56,14 +54,14 @@ export default function AudioPlayer({ isPlaying, isProcessing, progress, effectN
           ref={canvasRef}
           className="player-canvas"
           width={320}
-          height={32}
+          height={28}
         />
       </div>
 
       <div className="player-info">
         <div className="player-effect-name">{effectName || '—'}</div>
         <div className="player-status">
-          {isProcessing ? 'Applying effect...' : isPlaying ? 'Playing' : 'Ready'}
+          {isProcessing ? 'Applying...' : isPlaying ? 'Playing' : 'Ready'}
         </div>
       </div>
     </div>

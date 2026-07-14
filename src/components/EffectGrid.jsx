@@ -1,11 +1,4 @@
-const CATEGORIES = {
-  baby: 'core', helium: 'core', chipmunk: 'core', 'deep voice': 'core',
-  monster: 'core', dog: 'core', radio: 'core', cave: 'core', echo: 'core',
-  drunk: 'funny', crying: 'funny', 'evil laugh': 'funny',
-  cat: 'animal', duck: 'animal', alien: 'animal',
-  'horror whisper': 'creative', autotune: 'creative', glitch: 'creative', reverse: 'creative',
-  megaphone: 'core', underwater: 'creative',
-}
+const MAX = 4
 
 const EMOJIS = {
   baby: '👶', helium: '🎈', chipmunk: '🐿️', 'deep voice': '📢',
@@ -15,8 +8,6 @@ const EMOJIS = {
   'horror whisper': '👻', autotune: '🎤', glitch: '⚡', reverse: '⏪',
   megaphone: '📣', underwater: '🫧',
 }
-
-const MAX = 4
 
 export default function EffectGrid({ effects, selectedEffects, disabled, onSelect, isProcessing, onClear }) {
   const count = selectedEffects.length
@@ -55,7 +46,6 @@ export default function EffectGrid({ effects, selectedEffects, disabled, onSelec
             <button
               key={name}
               className={`effect-card ${isSelected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
-              data-category={CATEGORIES[name] || 'core'}
               onClick={() => !disabled && onSelect(name)}
               disabled={disabled || isProcessing}
             >
