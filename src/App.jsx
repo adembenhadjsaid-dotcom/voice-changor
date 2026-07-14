@@ -3,6 +3,7 @@ import { useAudioRecorder } from './hooks/useAudioRecorder'
 import { EFFECTS, renderEffect, getEffectNames } from './effects/index'
 import RecordButton from './components/RecordButton'
 import EffectGrid from './components/EffectGrid'
+import AudioPlayer from './components/AudioPlayer'
 import DownloadButton from './components/DownloadButton'
 
 const effectNames = getEffectNames()
@@ -14,8 +15,12 @@ export default function App() {
   const [processedBuffer, setProcessedBuffer] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [progress, setProgress] = useState(0)
   const audioCtxRef = useRef(null)
   const sourceRef = useRef(null)
+  const startTimeRef = useRef(0)
+  const durationRef = useRef(0)
+  const rafRef = useRef(null)
 
   const hasRecording = !!audioBlob
   const hasEffect = !!selectedEffect && !!processedBuffer
@@ -40,8 +45,45 @@ export default function App() {
       try { sourceRef.current.stop() } catch {}
       sourceRef.current = null
     }
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.close() } catch {}
+      audioCtxRef.current = null
+    }
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
     setIsPlaying(false)
+    setProgress(0)
   }, [])
+
+  const playBuffer = useCallback(async (buffer) => {
+    stopPlayback()
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    await ctx.resume()
+    audioCtxRef.current = ctx
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.connect(ctx.destination)
+    startTimeRef.current = ctx.currentTime
+    durationRef.current = buffer.duration
+
+    const tick = () => {
+      if (!audioCtxRef.current) return
+      const elapsed = ctx.currentTime - startTimeRef.current
+      const pct = Math.min(elapsed / durationRef.current, 1)
+      setProgress(pct)
+      if (pct < 1) rafRef.current = requestAnimationFrame(tick)
+    }
+
+    source.onended = () => {
+      setIsPlaying(false)
+      setProgress(0)
+      sourceRef.current = null
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+    source.start()
+    sourceRef.current = source
+    setIsPlaying(true)
+    rafRef.current = requestAnimationFrame(tick)
+  }, [stopPlayback])
 
   const handleEffectSelect = useCallback(async (effectName) => {
     if (!audioBuffer || isProcessing) return
@@ -53,33 +95,22 @@ export default function App() {
       const effectFn = EFFECTS[effectName]
       const result = await renderEffect(audioBuffer, effectFn)
       setProcessedBuffer(result)
+      // Auto-play the effect
+      playBuffer(result)
     } catch {
       setProcessedBuffer(null)
     } finally {
       setIsProcessing(false)
     }
-  }, [audioBuffer, isProcessing, stopPlayback])
+  }, [audioBuffer, isProcessing, stopPlayback, playBuffer])
 
-  const handlePlay = useCallback(() => {
-    if (!processedBuffer) return
+  const handlePlayPause = useCallback(() => {
     if (isPlaying) {
       stopPlayback()
-      return
+    } else if (processedBuffer) {
+      playBuffer(processedBuffer)
     }
-
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    audioCtxRef.current = ctx
-    const source = ctx.createBufferSource()
-    source.buffer = processedBuffer
-    source.connect(ctx.destination)
-    source.onended = () => {
-      setIsPlaying(false)
-      sourceRef.current = null
-    }
-    source.start()
-    sourceRef.current = source
-    setIsPlaying(true)
-  }, [processedBuffer, isPlaying, stopPlayback])
+  }, [isPlaying, processedBuffer, stopPlayback, playBuffer])
 
   const handleDownload = useCallback(async () => {
     if (!processedBuffer || !selectedEffect) return
@@ -99,7 +130,8 @@ export default function App() {
       if (e.target.tagName === 'INPUT') return
       if (e.code === 'Space') {
         e.preventDefault()
-        if (hasRecording) stop()
+        if (hasEffect) handlePlayPause()
+        else if (isRecording) stop()
         else start()
       }
       if (e.code === 'Escape') stopPlayback()
@@ -113,7 +145,7 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [hasRecording, start, stop, stopPlayback, handleEffectSelect])
+  }, [hasEffect, isRecording, start, stop, stopPlayback, handleEffectSelect, handlePlayPause])
 
   return (
     <div className={`app ${isRecording ? 'recording' : ''}`}>
@@ -144,22 +176,16 @@ export default function App() {
         />
       </section>
 
-      <div className={`player-section ${hasEffect ? 'visible' : ''}`}>
-        <div className="player-bar">
-          <button
-            className="play-btn"
-            onClick={handlePlay}
-            disabled={!hasEffect}
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-          <div className="player-info">
-            <div className="player-effect-name">{selectedEffect || '—'}</div>
-            <div className="player-status">
-              {isProcessing ? 'Processing...' : isPlaying ? 'Playing' : 'Ready'}
-            </div>
-          </div>
+      <div className={`player-section ${hasEffect || isProcessing ? 'visible' : ''}`}>
+        <AudioPlayer
+          isPlaying={isPlaying}
+          isProcessing={isProcessing}
+          progress={progress}
+          effectName={selectedEffect}
+          onPlayPause={handlePlayPause}
+          disabled={!hasEffect && !isProcessing}
+        />
+        <div className="player-actions">
           <DownloadButton
             disabled={!hasEffect}
             onClick={handleDownload}
@@ -168,7 +194,7 @@ export default function App() {
       </div>
 
       <div className="keyboard-hint">
-        <kbd>Space</kbd> record · <kbd>1</kbd>–<kbd>9</kbd> effects · <kbd>Esc</kbd> stop
+        <kbd>Space</kbd> record / play · <kbd>1</kbd>–<kbd>9</kbd> effects · <kbd>Esc</kbd> stop
       </div>
     </div>
   )
