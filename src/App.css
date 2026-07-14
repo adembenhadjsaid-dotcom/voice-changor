@@ -48,7 +48,6 @@ body {
   position: relative;
 }
 
-/* Ambient glow behind the record button */
 .app::before {
   content: '';
   position: fixed;
@@ -219,16 +218,111 @@ body {
   z-index: 1;
 }
 
-.effects-section h2 {
+.effects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.effects-header h2 {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 600;
   font-size: 0.8125rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-muted);
-  margin-bottom: 1rem;
 }
 
+.chain-count {
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  margin-left: 0.5rem;
+}
+
+.chain-clear {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.625rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chain-clear:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chain-clear:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Chain bar */
+.chain-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.chain-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.chain-pill-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 0.6875rem;
+}
+
+.chain-pill-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.chain-pill-x {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0 0.125rem;
+  transition: color 0.15s ease;
+}
+
+.chain-pill-x:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.chain-pill-x:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.chain-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* Effects grid */
 .effects-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -244,6 +338,7 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
+  position: relative;
 }
 
 .effect-card:hover:not(.disabled) {
@@ -283,6 +378,23 @@ body {
 .effect-card.selected[data-category="creative"] {
   border-color: var(--creative);
   box-shadow: 0 0 20px rgba(123, 97, 255, 0.2);
+}
+
+.effect-order {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.625rem;
+  background: var(--accent);
+  color: white;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .effect-name {
@@ -399,6 +511,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .player-status {
@@ -501,6 +614,10 @@ kbd {
 
   .keyboard-hint {
     display: none;
+  }
+
+  .chain-bar {
+    gap: 0.375rem;
   }
 }
 

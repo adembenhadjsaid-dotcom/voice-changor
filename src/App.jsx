@@ -1,17 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useAudioRecorder } from './hooks/useAudioRecorder'
-import { EFFECTS, renderEffect, getEffectNames } from './effects/index'
+import { EFFECTS, renderEffectChain, getEffectNames } from './effects/index'
 import RecordButton from './components/RecordButton'
 import EffectGrid from './components/EffectGrid'
 import AudioPlayer from './components/AudioPlayer'
 import DownloadButton from './components/DownloadButton'
 
 const effectNames = getEffectNames()
+const MAX_EFFECTS = 4
 
 export default function App() {
   const { start, stop, audioBlob, isRecording, duration, error } = useAudioRecorder()
   const [audioBuffer, setAudioBuffer] = useState(null)
-  const [selectedEffect, setSelectedEffect] = useState(null)
+  const [selectedEffects, setSelectedEffects] = useState([])
   const [processedBuffer, setProcessedBuffer] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -21,14 +22,14 @@ export default function App() {
   const startTimeRef = useRef(0)
   const durationRef = useRef(0)
   const rafRef = useRef(null)
+  const chainRef = useRef('')
 
   const hasRecording = !!audioBlob
-  const hasEffect = !!selectedEffect && !!processedBuffer
+  const hasEffect = selectedEffects.length > 0 && !!processedBuffer
 
-  // Decode blob to audio buffer when recording stops
   useEffect(() => {
     if (!audioBlob) return
-    setSelectedEffect(null)
+    setSelectedEffects([])
     setProcessedBuffer(null)
     setIsPlaying(false)
     stopPlayback()
@@ -85,24 +86,54 @@ export default function App() {
     rafRef.current = requestAnimationFrame(tick)
   }, [stopPlayback])
 
-  const handleEffectSelect = useCallback(async (effectName) => {
+  const handleToggleEffect = useCallback((effectName) => {
     if (!audioBuffer || isProcessing) return
     stopPlayback()
-    setSelectedEffect(effectName)
-    setIsProcessing(true)
 
-    try {
-      const effectFn = EFFECTS[effectName]
-      const result = await renderEffect(audioBuffer, effectFn)
-      setProcessedBuffer(result)
-      // Auto-play the effect
-      playBuffer(result)
-    } catch {
+    setSelectedEffects(prev => {
+      const idx = prev.indexOf(effectName)
+      if (idx !== -1) {
+        return prev.filter((_, i) => i !== idx)
+      }
+      if (prev.length >= MAX_EFFECTS) return prev
+      return [...prev, effectName]
+    })
+  }, [audioBuffer, isProcessing, stopPlayback])
+
+  const handleClearChain = useCallback(() => {
+    stopPlayback()
+    setSelectedEffects([])
+    setProcessedBuffer(null)
+  }, [stopPlayback])
+
+  // Render chain whenever selection changes
+  useEffect(() => {
+    if (!audioBuffer || selectedEffects.length === 0) {
       setProcessedBuffer(null)
-    } finally {
-      setIsProcessing(false)
+      return
     }
-  }, [audioBuffer, isProcessing, stopPlayback, playBuffer])
+
+    const key = selectedEffects.join(',')
+    if (key === chainRef.current) return
+    chainRef.current = key
+
+    let cancelled = false
+    const fns = selectedEffects.map(n => EFFECTS[n]).filter(Boolean)
+
+    if (fns.length === 0) { setProcessedBuffer(null); return }
+
+    setIsProcessing(true)
+    renderEffectChain(audioBuffer, fns).then(result => {
+      if (cancelled) return
+      setProcessedBuffer(result)
+      setIsProcessing(false)
+      playBuffer(result)
+    }).catch(() => {
+      if (!cancelled) { setProcessedBuffer(null); setIsProcessing(false) }
+    })
+
+    return () => { cancelled = true }
+  }, [audioBuffer, selectedEffects, playBuffer])
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
@@ -113,18 +144,17 @@ export default function App() {
   }, [isPlaying, processedBuffer, stopPlayback, playBuffer])
 
   const handleDownload = useCallback(async () => {
-    if (!processedBuffer || !selectedEffect) return
+    if (!processedBuffer || selectedEffects.length === 0) return
     const { encodeWav } = await import('./utils/exportWav')
     const blob = encodeWav(processedBuffer)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${selectedEffect.toLowerCase().replace(/\s+/g, '-')}-voice.wav`
+    a.download = `${selectedEffects.join('-')}-voice.wav`
     a.click()
     URL.revokeObjectURL(url)
-  }, [processedBuffer, selectedEffect])
+  }, [processedBuffer, selectedEffects])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === 'INPUT') return
@@ -135,17 +165,10 @@ export default function App() {
         else start()
       }
       if (e.code === 'Escape') stopPlayback()
-      const num = parseInt(e.key)
-      if (num >= 1 && num <= 9 && num <= effectNames.length) {
-        handleEffectSelect(effectNames[num - 1])
-      }
-      if (e.key === '0' && effectNames.length >= 10) {
-        handleEffectSelect(effectNames[9])
-      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [hasEffect, isRecording, start, stop, stopPlayback, handleEffectSelect, handlePlayPause])
+  }, [hasEffect, isRecording, start, stop, stopPlayback, handlePlayPause])
 
   return (
     <div className={`app ${isRecording ? 'recording' : ''}`}>
@@ -166,13 +189,13 @@ export default function App() {
       </div>
 
       <section className="effects-section">
-        <h2>Effects</h2>
         <EffectGrid
           effects={effectNames}
-          selected={selectedEffect}
+          selectedEffects={selectedEffects}
           disabled={!hasRecording}
-          onSelect={handleEffectSelect}
+          onSelect={handleToggleEffect}
           isProcessing={isProcessing}
+          onClear={handleClearChain}
         />
       </section>
 
@@ -181,7 +204,7 @@ export default function App() {
           isPlaying={isPlaying}
           isProcessing={isProcessing}
           progress={progress}
-          effectName={selectedEffect}
+          effectName={selectedEffects.join(' → ')}
           onPlayPause={handlePlayPause}
           disabled={!hasEffect && !isProcessing}
         />
@@ -194,7 +217,7 @@ export default function App() {
       </div>
 
       <div className="keyboard-hint">
-        <kbd>Space</kbd> record / play · <kbd>1</kbd>–<kbd>9</kbd> effects · <kbd>Esc</kbd> stop
+        <kbd>Space</kbd> record / play · <kbd>Esc</kbd> stop
       </div>
     </div>
   )
